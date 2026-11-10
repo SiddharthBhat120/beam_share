@@ -182,6 +182,16 @@ mDNS + AWDL cover discovery without extra permissions).
   Android command-line tools + platform 36 + NDK 28.2 → `E:\dev\android`,
   Microsoft OpenJDK 21 → `E:\dev\jdk21`, Visual Studio 2022 Build Tools
   (C++ workload) via winget. User PATH/ANDROID_HOME/JAVA_HOME were set.
+- **No `permission_handler` package.** Its current Android part compiles
+  against SDK 37, whose platform package is published as `android-37.0`,
+  which the Flutter template's Android Gradle Plugin (9.1) cannot match.
+  Runtime permissions are requested by ~30 lines of Kotlin instead
+  (`requestPermissions` in BeamPlatform.kt): one dependency fewer.
+- `android/gradle.properties` sets `kotlin.incremental=false`: the project is
+  on drive E: and the Pub cache on C:, which breaks Kotlin's incremental
+  caches ("different roots"). Full compiles are only a few seconds slower.
+- The APK is a "fat" APK (all CPU types, ~69 MB, mostly the ML Kit QR
+  scanner). `flutter build apk --split-per-abi` makes ~25 MB per-phone APKs.
 - Release APK is signed with the debug key (Flutter default) so it installs
   directly. Make your own keystore before publishing to the Play Store.
 - Application id / bundle id: `com.beamshare.beam_share` (Android),

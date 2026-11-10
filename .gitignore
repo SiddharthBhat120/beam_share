@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Built release files (APK / Windows zip) are not committed
+/release/
