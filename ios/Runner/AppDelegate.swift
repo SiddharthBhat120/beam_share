@@ -241,7 +241,8 @@ final class P2PBridge {
   private let queue = DispatchQueue(label: "beam.p2p")
   private var listener: NWListener?
   private var browser: NWBrowser?
-  private var endpoints: [String: NWEndpoint] = [:]
+  // "Network." prefix: NetworkExtension also has an (old) NWEndpoint class.
+  private var endpoints: [String: Network.NWEndpoint] = [:]
   private var relays: [NWListener] = []
   private var pipes: [Pipe] = []
   var onPeers: (([[String: Any]]) -> Void)?
@@ -261,7 +262,7 @@ final class P2PBridge {
     for (k, v) in txt { record[k] = v }
     l.service = NWListener.Service(name: name, type: P2PBridge.serviceType, domain: nil, txtRecord: record)
     l.newConnectionHandler = { [weak self] incoming in
-      guard let self = self, let port = NWEndpoint.Port(rawValue: UInt16(localPort)) else { return }
+      guard let self = self, let port = Network.NWEndpoint.Port(rawValue: UInt16(localPort)) else { return }
       let local = NWConnection(host: "127.0.0.1", port: port, using: .tcp)
       self.addPipe(Pipe(incoming, local))
     }
@@ -293,7 +294,7 @@ final class P2PBridge {
 
   /// Opens a loopback port; whatever Dart sends there goes to the peer.
   func connect(name: String, done: @escaping (Int?) -> Void) {
-    queue.async {
+    queue.async { () -> Void in
       guard let endpoint = self.endpoints[name],
             let relay = try? NWListener(using: .tcp, on: .any) else { done(nil); return }
       relay.newConnectionHandler = { [weak self] local in
@@ -319,7 +320,10 @@ final class P2PBridge {
   private func addPipe(_ p: Pipe) {
     pipes.append(p)
     p.onClose = { [weak self, weak p] in
-      self?.queue.async { self?.pipes.removeAll { $0 === p } }
+      guard let self = self else { return }
+      self.queue.async { () -> Void in
+        self.pipes.removeAll { $0 === p }
+      }
     }
     p.start(queue: queue)
   }
