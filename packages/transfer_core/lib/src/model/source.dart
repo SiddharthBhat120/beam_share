@@ -2,11 +2,34 @@
 //
 // The engine only needs "open this file and let me read at offsets". On
 // Windows/iOS that's a normal path. On Android, files picked through the
-// system picker are content:// URIs; the app turns each one into a raw file
-// descriptor (/proc/self/fd/N), so we still read the original bytes directly,
-// with no copying and no re-encoding.
+// system picker are content:// URIs; the app reads their raw bytes through a
+// small Kotlin channel (ContentResolver + FileChannel), so we still send the
+// original bytes with no temporary copy and no re-encoding.
 
 import 'dart:io';
+import 'dart:typed_data';
+
+/// Random-access reader for one open source file.
+abstract class SourceReader {
+  /// Reads exactly [length] bytes at [offset] (fewer only at end of file).
+  Future<Uint8List> readAt(int offset, int length);
+  Future<void> close();
+}
+
+/// [SourceReader] backed by a dart:io [RandomAccessFile].
+class FileSourceReader implements SourceReader {
+  FileSourceReader(this._raf);
+  final RandomAccessFile _raf;
+
+  @override
+  Future<Uint8List> readAt(int offset, int length) async {
+    await _raf.setPosition(offset);
+    return _raf.read(length);
+  }
+
+  @override
+  Future<void> close() => _raf.close();
+}
 
 /// One item to send.
 abstract class SourceFile {
@@ -17,10 +40,7 @@ abstract class SourceFile {
   bool get isDirectory;
 
   /// Opens the file for reading. Called lazily, one file at a time.
-  Future<RandomAccessFile> open();
-
-  /// Called after the file was closed (e.g. to release an Android fd).
-  Future<void> release() async {}
+  Future<SourceReader> open();
 }
 
 /// A file on the local file system.
@@ -40,7 +60,7 @@ class LocalSourceFile extends SourceFile {
   bool get isDirectory => false;
 
   @override
-  Future<RandomAccessFile> open() => file.open();
+  Future<SourceReader> open() async => FileSourceReader(await file.open());
 }
 
 /// A folder entry (keeps empty folders and folder structure).
@@ -57,20 +77,18 @@ class DirectorySource extends SourceFile {
   bool get isDirectory => true;
 
   @override
-  Future<RandomAccessFile> open() => throw UnsupportedError('directory');
+  Future<SourceReader> open() => throw UnsupportedError('directory');
 }
 
-/// A source whose bytes are opened by a callback (used for Android fds and
-/// iOS exported photos).
+/// A source whose reader is created by a callback (used for Android
+/// content URIs and similar).
 class CallbackSourceFile extends SourceFile {
   CallbackSourceFile({
     required this.relativePath,
     required this.size,
     required this.modified,
-    required Future<RandomAccessFile> Function() opener,
-    Future<void> Function()? releaser,
-  })  : _opener = opener,
-        _releaser = releaser;
+    required Future<SourceReader> Function() opener,
+  }) : _opener = opener;
 
   @override
   final String relativePath;
@@ -78,15 +96,12 @@ class CallbackSourceFile extends SourceFile {
   final int size;
   @override
   final DateTime modified;
-  final Future<RandomAccessFile> Function() _opener;
-  final Future<void> Function()? _releaser;
+  final Future<SourceReader> Function() _opener;
 
   @override
   bool get isDirectory => false;
   @override
-  Future<RandomAccessFile> open() => _opener();
-  @override
-  Future<void> release() async => _releaser?.call();
+  Future<SourceReader> open() => _opener();
 }
 
 /// Builds sources from local paths. Folders are walked recursively and keep

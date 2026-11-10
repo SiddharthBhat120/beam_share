@@ -380,15 +380,14 @@ class TransferSender {
     final n = e.pieceCount;
     final cvs = _cvs.putIfAbsent(e.id, () => List<Uint8List?>.filled(n, null));
     final have = _remoteHave[e.id];
-    final raf = await src.open();
+    final reader = await src.open();
     try {
       for (var i = 0; i < n; i++) {
         if (aborted()) return;
         final needed = have == null || !have[i];
         if (!needed && cvs[i] != null) continue;
         final len = e.pieceLength(i);
-        await raf.setPosition(i * e.pieceSize);
-        final data = await raf.read(len);
+        final data = await reader.readAt(i * e.pieceSize, len);
         if (data.length != len) throw StateError('${e.path} changed while sending');
         final cv = Blake3.pieceCv(data, i, e.pieceSize);
         if (cvs[i] != null && !bytesEqual(cvs[i]!, cv)) {
@@ -403,8 +402,7 @@ class TransferSender {
         }
       }
     } finally {
-      await raf.close();
-      await src.release();
+      await reader.close();
     }
     // All piece hashes known: tell the receiver the full-file BLAKE3 hash.
     final root = Blake3.rootFromPieceCvs(cvs.cast<Uint8List>());
@@ -412,15 +410,13 @@ class TransferSender {
   }
 
   Future<Uint8List> _readRange(SourceFile src, int offset, int length) async {
-    final raf = await src.open();
+    final reader = await src.open();
     try {
-      if (offset > 0) await raf.setPosition(offset);
-      final data = await raf.read(length);
+      final data = await reader.readAt(offset, length);
       if (data.length != length) throw StateError('${src.relativePath} changed while sending');
       return data;
     } finally {
-      await raf.close();
-      await src.release();
+      await reader.close();
     }
   }
 
