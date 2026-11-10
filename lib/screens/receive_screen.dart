@@ -151,7 +151,12 @@ class _ReceiveScreenState extends State<ReceiveScreen> with StageNavigation {
                       spacing: 8,
                       children: [
                         OutlinedButton.icon(
-                          onPressed: t.myCode == null ? null : () => setState(() => _showMyCode = !_showMyCode),
+                          onPressed: t.myCode == null
+                              ? null
+                              : () {
+                                  setState(() => _showMyCode = !_showMyCode);
+                                  if (_showMyCode) t.ensureHotspot();
+                                },
                           icon: Icon(_showMyCode ? Icons.radar_rounded : Icons.qr_code_2_rounded),
                           label: Text(_showMyCode ? 'Hide my code' : 'Show my code'),
                         ),

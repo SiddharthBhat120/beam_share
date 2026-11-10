@@ -1,0 +1,76 @@
+# Codemagic CI: builds the iOS app on a cloud Mac and uploads it to
+# TestFlight, so you can install it on your iPhone without owning a Mac.
+# Step-by-step setup: see README.md, section "iOS without a Mac".
+#
+# Before the first build, in Codemagic:
+#   1. Teams > Integrations > App Store Connect: add an API key and name the
+#      integration exactly "BeamShareASC" (or change the name below).
+#   2. Replace APP_STORE_APPLE_ID with the numeric Apple ID of your app
+#      (App Store Connect > your app > App Information > Apple ID).
+#   3. If you change the bundle id, change it here AND in Xcode settings
+#      (ios/Runner.xcodeproj, PRODUCT_BUNDLE_IDENTIFIER).
+
+workflows:
+  ios-testflight:
+    name: iOS -> TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: BeamShareASC
+    environment:
+      flutter: stable
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.beamshare.beamShare
+      vars:
+        APP_STORE_APPLE_ID: 0000000000
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+      - name: Engine unit tests
+        script: |
+          cd packages/transfer_core
+          dart pub get
+          dart test test/blake3_test.dart test/unit_test.dart
+      - name: Use signing profiles
+        script: xcode-project use-profiles
+      - name: Build IPA
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || echo 0)
+          flutter build ipa --release \
+            --build-number=$((LATEST + 1)) \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+  android-release:
+    name: Android APK
+    max_build_duration: 45
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+      java: 17
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+      - name: Analyze and test
+        script: |
+          flutter analyze
+          flutter test
+      - name: Build APK
+        script: flutter build apk --release
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk

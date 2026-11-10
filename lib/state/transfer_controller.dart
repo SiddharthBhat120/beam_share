@@ -74,6 +74,10 @@ class TransferController extends ChangeNotifier {
   // -------------------------------------------------------------------------
 
   /// Starts listening. For a sender, [items] must be set first.
+  ///
+  /// The sender creates the offline Wi-Fi right away (its QR code is the main
+  /// way to connect). The receiver only does so when the user taps
+  /// "Show my code" ([ensureHotspot]), so just opening Receive changes nothing.
   Future<void> startHosting({required String asRole}) async {
     await stopSession(keepItems: true);
     _set(() {
@@ -96,24 +100,11 @@ class TransferController extends ChangeNotifier {
     });
     final port = await _listening!.future;
 
+    _port = port;
+    _token = token;
     // Offline network for the other device to join (Android / Windows).
-    if (app.offlineMode && PlatformBridge.canHostHotspot) {
-      _set(() => status = 'Creating offline Wi-Fi...');
-      hotspot = await PlatformBridge.startHotspot(app.deviceName);
-      if (hotspot != null) await Future<void>.delayed(const Duration(milliseconds: 800));
-    }
-    final hosts = await PlatformBridge.localIPv4s();
-    myCode = PairingInfo(
-      deviceName: app.deviceName,
-      platform: PlatformBridge.platformName,
-      hosts: hosts,
-      port: port,
-      fingerprint: app.identity.fingerprint,
-      token: token,
-      role: asRole,
-      ssid: hotspot?.ssid,
-      passphrase: hotspot?.passphrase,
-    );
+    if (asRole == 'sender') await _startHotspotIfWanted();
+    await _refreshCode();
     if (asRole == 'receiver') {
       await discovery.advertise(me: app.me, port: port, fingerprint: app.identity.fingerprint);
     } else {
@@ -122,10 +113,48 @@ class TransferController extends ChangeNotifier {
     }
     _set(() {
       stage = Stage.waiting;
-      status = hotspot != null
-          ? 'Offline Wi-Fi "${hotspot!.ssid}" is on'
-          : (hosts.isEmpty ? 'No network: turn on Wi-Fi or a hotspot' : 'Using the current Wi-Fi network');
+      status = _networkStatus();
     });
+  }
+
+  int? _port;
+  String? _token;
+
+  Future<void> _startHotspotIfWanted() async {
+    if (!app.offlineMode || !PlatformBridge.canHostHotspot || hotspot != null) return;
+    _set(() => status = 'Creating offline Wi-Fi...');
+    hotspot = await PlatformBridge.startHotspot(app.deviceName);
+    // Give the new network interface a moment to get its IP address.
+    if (hotspot != null) await Future<void>.delayed(const Duration(milliseconds: 800));
+  }
+
+  Future<void> _refreshCode() async {
+    final hosts = await PlatformBridge.localIPv4s();
+    myCode = PairingInfo(
+      deviceName: app.deviceName,
+      platform: PlatformBridge.platformName,
+      hosts: hosts,
+      port: _port!,
+      fingerprint: app.identity.fingerprint,
+      token: _token!,
+      role: role,
+      ssid: hotspot?.ssid,
+      passphrase: hotspot?.passphrase,
+    );
+  }
+
+  String _networkStatus() {
+    if (hotspot != null) return 'Offline Wi-Fi "${hotspot!.ssid}" is on';
+    if (myCode?.hosts.isEmpty ?? true) return 'No network yet: turn on Wi-Fi';
+    return 'Using the current Wi-Fi network';
+  }
+
+  /// Receiver: create the offline Wi-Fi and put it into "my code".
+  Future<void> ensureHotspot() async {
+    if (stage != Stage.waiting || _port == null) return;
+    await _startHotspotIfWanted();
+    await _refreshCode();
+    _set(() => status = _networkStatus());
   }
 
   // -------------------------------------------------------------------------
@@ -183,7 +212,22 @@ class TransferController extends ChangeNotifier {
       error = null;
       status = 'Waiting for ${d.name} to accept...';
     });
-    await _dial(hosts: d.hosts, port: d.port, fingerprint: d.fingerprint, token: null);
+    var hosts = d.hosts;
+    var port = d.port;
+    if (d.p2pName != null) {
+      // iPhone peer-to-peer: connect through the local relay port.
+      final relay = await PlatformBridge.p2pConnect(d.p2pName!);
+      if (relay == null) {
+        _set(() {
+          stage = Stage.waiting;
+          error = 'Could not reach ${d.name}. Keep both iPhones unlocked and close together.';
+        });
+        return;
+      }
+      hosts = const ['127.0.0.1'];
+      port = relay;
+    }
+    await _dial(hosts: hosts, port: port, fingerprint: d.fingerprint, token: null);
   }
 
   Future<void> _dial({required List<String> hosts, required int port, required String fingerprint, String? token}) async {
@@ -257,6 +301,11 @@ class TransferController extends ChangeNotifier {
               e['bytes'] as int?,
             ));
       case 'started':
+        if (stage == Stage.idle) {
+          // Arrived after the user already left: stop it.
+          cancel();
+          return;
+        }
         PlatformBridge.keepScreenOn(true);
         _dialResult?.complete();
         _dialResult = null;
@@ -330,7 +379,7 @@ class TransferController extends ChangeNotifier {
 
   /// Ends everything and goes back to idle.
   Future<void> stopSession({bool keepItems = false}) async {
-    if (stage == Stage.transferring) cancel();
+    if (stage == Stage.transferring || stage == Stage.connecting) cancel();
     await _teardownNetwork();
     PlatformBridge.keepScreenOn(false);
     _set(() {

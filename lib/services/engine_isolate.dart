@@ -74,6 +74,7 @@ class _EngineHost {
   TransferSender? _sender;
   TransferReceiver? _receiver;
   bool _busy = false;
+  bool _abortDial = false;
   int _requestSeq = 0;
   final _pendingRequests = <int, Completer<bool>>{};
 
@@ -85,7 +86,9 @@ class _EngineHost {
         await _server?.close();
         _server = null;
       case 'dial':
-        await _dial(m);
+        // Not awaited: waiting for the other user to tap "Accept" can take a
+        // while, and "cancel" must still be handled in the meantime.
+        unawaited(_dial(m));
       case 'requestReply':
         _pendingRequests.remove(m['id'] as int)?.complete(m['accept'] as bool);
       case 'pause':
@@ -95,6 +98,7 @@ class _EngineHost {
         _sender?.resume();
         _receiver?.resume();
       case 'cancel':
+        if (_sender == null && _receiver == null) _abortDial = true;
         await _sender?.cancel();
         await _receiver?.cancel();
     }
@@ -144,6 +148,7 @@ class _EngineHost {
     if (_busy) return;
     final role = m['role'] as String;
     _busy = true;
+    _abortDial = false;
     try {
       final link = await DialerLink.connect(
         hosts: (m['hosts'] as List).cast<String>(),
@@ -155,6 +160,12 @@ class _EngineHost {
         offer: (m['offer'] as Map?)?.cast<String, Object?>(),
       );
       _busy = false;
+      if (_abortDial) {
+        // The user left the screen while we were connecting.
+        _abortDial = false;
+        await link.close();
+        return;
+      }
       _startJob(link, role, m);
     } on PairingRejected catch (e) {
       _busy = false;

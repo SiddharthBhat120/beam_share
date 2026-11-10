@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/theme.dart';
 import '../main.dart';
 import '../models/picked_item.dart';
+import '../services/permissions.dart';
 import '../services/platform_bridge.dart';
 import '../util/format.dart';
 import 'share_screen.dart';
@@ -66,7 +67,12 @@ class _SendScreenState extends State<SendScreen> {
                   _PickButton(
                     icon: Icons.photo_library_rounded,
                     label: 'Photos &\nvideos',
-                    onTap: _picking ? null : () => _pick(PlatformBridge.pickMedia),
+                    onTap: _picking
+                        ? null
+                        : () => _pick(() async {
+                              await Permissions.ensureMediaLocation();
+                              return PlatformBridge.pickMedia();
+                            }),
                   ),
                   const SizedBox(width: 12),
                   _PickButton(

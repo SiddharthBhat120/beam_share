@@ -7,6 +7,7 @@
 // Things that are easy in Dart on a platform (e.g. "netsh" on Windows) are
 // done here instead.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -259,6 +260,61 @@ class PlatformBridge {
   static Future<List<PickedItem>> _iosPickMedia() async {
     final list = await _channel.invokeListMethod<Map<dynamic, dynamic>>('pickMedia') ?? [];
     return [for (final m in list) PickedItem.fromMap(m)];
+  }
+
+  // ---------------------------------------------------------------------
+  // iPhone <-> iPhone peer-to-peer Wi-Fi (AWDL), no network needed
+  // ---------------------------------------------------------------------
+
+  static final _p2pPeers = StreamController<List<Map<String, dynamic>>>.broadcast();
+  static bool _handlerSet = false;
+
+  /// Peers found over AWDL: {'name': ..., 'txt': {...}}.
+  static Stream<List<Map<String, dynamic>>> get p2pPeers {
+    if (!_handlerSet) {
+      _handlerSet = true;
+      _channel.setMethodCallHandler((call) async {
+        if (call.method == 'p2pPeers') {
+          final list = (call.arguments as List)
+              .map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v)))
+              .toList();
+          _p2pPeers.add(list);
+        }
+        return null;
+      });
+    }
+    return _p2pPeers.stream;
+  }
+
+  static Future<void> p2pAdvertise({required String name, required int port, required Map<String, String> txt}) async {
+    if (!isIOS) return;
+    try {
+      await _channel.invokeMethod('p2pAdvertise', {'name': name, 'port': port, 'txt': txt});
+    } catch (_) {}
+  }
+
+  static Future<void> p2pBrowse() async {
+    if (!isIOS) return;
+    p2pPeers; // make sure the callback handler is installed
+    try {
+      await _channel.invokeMethod('p2pBrowse');
+    } catch (_) {}
+  }
+
+  static Future<void> p2pStop() async {
+    if (!isIOS) return;
+    try {
+      await _channel.invokeMethod('p2pStop');
+    } catch (_) {}
+  }
+
+  /// Returns a local port that relays to the peer over AWDL.
+  static Future<int?> p2pConnect(String name) async {
+    try {
+      return await _channel.invokeMethod<int>('p2pConnect', {'name': name});
+    } catch (_) {
+      return null;
+    }
   }
 
   /// IPv4 addresses of this device (all of them; the other side tries each).

@@ -24,6 +24,7 @@ class NearbyDevice {
     required this.fingerprint,
     required this.hosts,
     required this.port,
+    this.p2pName,
   });
 
   final String id;
@@ -32,12 +33,24 @@ class NearbyDevice {
   final String fingerprint;
   final List<String> hosts;
   final int port;
+
+  /// Set when found over iPhone peer-to-peer Wi-Fi (connect via relay).
+  final String? p2pName;
 }
 
 class DiscoveryService {
   nsd.Registration? _registration;
   nsd.Discovery? _discovery;
+  StreamSubscription<List<Map<String, dynamic>>>? _p2pSub;
+  List<NearbyDevice> _lan = const [];
+  List<NearbyDevice> _p2p = const [];
   final _devices = StreamController<List<NearbyDevice>>.broadcast();
+
+  void _publishMerged() {
+    if (_devices.isClosed) return;
+    final ids = _lan.map((d) => d.id).toSet();
+    _devices.add([..._lan, ..._p2p.where((d) => !ids.contains(d.id))]);
+  }
 
   Stream<List<NearbyDevice>> get devices => _devices.stream;
 
@@ -59,6 +72,12 @@ class DiscoveryService {
     } catch (e) {
       debugPrint('mDNS advertise failed: $e');
     }
+    // iPhones can also be found with no shared network at all.
+    await PlatformBridge.p2pAdvertise(
+      name: me.name,
+      port: port,
+      txt: {'id': me.id, 'n': me.name, 'pf': me.platform, 'fp': fingerprint},
+    );
   }
 
   Future<void> stopAdvertising() async {
@@ -98,14 +117,34 @@ class DiscoveryService {
             port: s.port!,
           ));
         }
-        if (!_devices.isClosed) _devices.add(list);
+        _lan = list;
+        _publishMerged();
       }
 
       d.addListener(publish);
       publish();
     } catch (e) {
       debugPrint('mDNS browse failed: $e');
-      if (!_devices.isClosed) _devices.add(const []);
+      _publishMerged();
+    }
+    if (PlatformBridge.isIOS) {
+      _p2pSub = PlatformBridge.p2pPeers.listen((peers) {
+        _p2p = [
+          for (final p in peers)
+            if ((p['txt'] as Map?)?['id'] != null && (p['txt'] as Map)['id'] != myId)
+              NearbyDevice(
+                id: (p['txt'] as Map)['id'] as String,
+                name: (p['txt'] as Map)['n'] as String? ?? p['name'] as String,
+                platform: (p['txt'] as Map)['pf'] as String? ?? 'ios',
+                fingerprint: (p['txt'] as Map)['fp'] as String? ?? '',
+                hosts: const ['127.0.0.1'],
+                port: 0,
+                p2pName: p['name'] as String,
+              ),
+        ];
+        _publishMerged();
+      });
+      await PlatformBridge.p2pBrowse();
     }
   }
 
@@ -122,6 +161,10 @@ class DiscoveryService {
   Future<void> stopAll() async {
     await stopAdvertising();
     await stopBrowsing();
+    await _p2pSub?.cancel();
+    _p2pSub = null;
+    _p2p = const [];
+    await PlatformBridge.p2pStop();
     await PlatformBridge.multicastLock(false);
   }
 

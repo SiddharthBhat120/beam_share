@@ -2,6 +2,27 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Beam Share connects directly to your other device over Wi-Fi to send and receive files. Nothing goes through the internet.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_beamshare._tcp</string>
+		<string>_beamp2p._tcp</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera is used to scan the QR code shown on the other device.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Beam Share reads the photos and videos you pick so it can send the original files in full quality.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UISupportsDocumentBrowser</key>
+	<false/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>wifi</string>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -15,7 +36,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>beam_share</string>
+	<string>Beam Share</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

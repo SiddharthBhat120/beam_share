@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.beamshare" "\0"
-            VALUE "FileDescription", "beam_share" "\0"
+            VALUE "FileDescription", "Beam Share" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "beam_share" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.beamshare. All rights reserved." "\0"
             VALUE "OriginalFilename", "beam_share.exe" "\0"
-            VALUE "ProductName", "beam_share" "\0"
+            VALUE "ProductName", "Beam Share" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
