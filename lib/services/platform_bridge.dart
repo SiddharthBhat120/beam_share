@@ -76,6 +76,28 @@ class PlatformBridge {
     } catch (_) {}
   }
 
+  /// True only for iOS builds made with a PAID Apple account and
+  /// `--dart-define=IOS_HOTSPOT=true` (needs the Hotspot entitlement).
+  static const iosCanJoinWifi = bool.fromEnvironment('IOS_HOTSPOT');
+
+  /// Can the app join the other device's Wi-Fi by itself?
+  static bool get canJoinWifi => !isIOS || iosCanJoinWifi;
+
+  /// iOS: opens Settings so the user can join a Wi-Fi network by hand.
+  static Future<void> openWifiSettings() async {
+    try {
+      await _channel.invokeMethod('openWifiSettings');
+    } catch (_) {}
+  }
+
+  /// Standard Wi-Fi QR text. The iPhone Camera app (and Android camera)
+  /// offers "Join network" when it scans this, with no app needed.
+  static String wifiQrData(String ssid, String passphrase) {
+    // Special characters must be escaped with a backslash.
+    String esc(String v) => v.replaceAllMapped(RegExp(r'([\\;,:"])'), (m) => '\\${m[1]}');
+    return 'WIFI:T:WPA;S:${esc(ssid)};P:${esc(passphrase)};;';
+  }
+
   /// Joins the other device's hotspot. Returns true once connected.
   static Future<bool> joinWifi(String ssid, String passphrase) async {
     if (isWindows) return _windowsJoin(ssid, passphrase);

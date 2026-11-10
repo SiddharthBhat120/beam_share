@@ -305,3 +305,122 @@ class InfoBanner extends StatelessWidget {
     );
   }
 }
+
+/// Shows the Beam Share QR code, and, when this device runs an offline
+/// Wi-Fi, a second "Wi-Fi code" an iPhone can scan with its Camera app to
+/// join that network for free (no paid Apple account needed).
+class CodeSwitcher extends StatefulWidget {
+  const CodeSwitcher({super.key, required this.beamCode, this.wifiCode, this.size = 230});
+  final String beamCode;
+  final String? wifiCode;
+  final double size;
+
+  @override
+  State<CodeSwitcher> createState() => _CodeSwitcherState();
+}
+
+class _CodeSwitcherState extends State<CodeSwitcher> {
+  bool _wifi = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final showWifi = _wifi && widget.wifiCode != null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (widget.wifiCode != null) ...[
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('Beam Share code'), icon: Icon(Icons.qr_code_2_rounded)),
+              ButtonSegment(value: true, label: Text('iPhone Wi-Fi'), icon: Icon(Icons.wifi_rounded)),
+            ],
+            selected: {_wifi},
+            onSelectionChanged: (s) => setState(() => _wifi = s.first),
+          ),
+          const SizedBox(height: 14),
+        ],
+        QrCard(data: showWifi ? widget.wifiCode! : widget.beamCode, size: widget.size),
+        const SizedBox(height: 12),
+        Text(
+          showWifi
+              ? 'iPhone: open the Camera app, point at this code, tap "Join". '
+                  'Then switch back to "Beam Share code" and scan it inside Beam Share.'
+              : 'On the other device: open Beam Share › Receive › Scan',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: cs.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+/// Free iOS builds: "join this Wi-Fi in Settings, then come back".
+class ManualJoinCard extends StatelessWidget {
+  const ManualJoinCard({
+    super.key,
+    required this.ssid,
+    required this.passphrase,
+    required this.onOpenSettings,
+    required this.onCancel,
+  });
+  final String ssid;
+  final String passphrase;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    Widget row(String label, String value) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              SizedBox(width: 90, child: Text(label, style: TextStyle(color: cs.onSurfaceVariant))),
+              Expanded(
+                child: SelectableText(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              ),
+            ],
+          ),
+        );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.wifi_rounded),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text("Join the other device's Wi-Fi",
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            row('Wi-Fi name', ssid),
+            row('Password', passphrase),
+            const SizedBox(height: 8),
+            Text(
+              'The password is already copied. Open Settings › Wi-Fi, tap this network, '
+              'paste the password, then come back here. The transfer starts by itself.',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onOpenSettings,
+              icon: const Icon(Icons.settings_rounded),
+              label: const Text('Open Wi-Fi settings'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(onPressed: onCancel, child: const Text('Cancel')),
+            const SizedBox(height: 4),
+            const LinearProgressIndicator(),
+          ],
+        ),
+      ),
+    );
+  }
+}

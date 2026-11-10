@@ -19,9 +19,9 @@ Pick files  ->  show QR (or tap a nearby device)  ->  done
 | `lib/services/engine_isolate.dart` | Runs the engine on a background thread |
 | `packages/transfer_core/` | The transfer engine: pure Dart, no UI. Protocol, BLAKE3, TLS, resume |
 | `android/app/src/main/kotlin/.../BeamPlatform.kt` | Wi-Fi Direct group, LocalOnlyHotspot, joining Wi-Fi, file pickers, raw file reads |
-| `ios/Runner/AppDelegate.swift` | Hotspot join, original photo export, iPhone-to-iPhone peer-to-peer |
+| `ios/Runner/AppDelegate.swift` | Original photo export, iPhone-to-iPhone peer-to-peer, Wi-Fi settings shortcut |
 | `windows/runner/beam_platform.cpp` | Wi-Fi Direct soft-AP hotspot, keep awake |
-| `codemagic.yaml` | Cloud build for iOS → TestFlight (no Mac needed) |
+| `codemagic.yaml`, `.github/workflows/` | Free cloud builds of the iPhone app (no Mac needed) |
 | `DECISIONS.md` | Why things are built the way they are |
 | `KNOWN_LIMITATIONS.md` | What still needs testing on real devices |
 
@@ -128,12 +128,28 @@ The app is the whole folder `build/windows/x64/runner/Release/` (zip it;
 
 ---
 
-## 3. iOS without a Mac (Codemagic + TestFlight)
+## 3. iPhone for free (no Mac, no 99 USD Apple account)
 
-You need: an **Apple Developer account** (99 USD/year), a GitHub (or GitLab)
-account, a free **Codemagic** account. Total time the first time: ~1 hour.
+Two free pieces: a **cloud Mac** builds the app, and **SideStore/AltStore** on
+your Windows PC installs it on the iPhone with your normal Apple ID.
 
-1. **Push this project to GitHub** (private repo is fine):
+**Free-account limits (Apple's rules, not ours):**
+- The app must be **refreshed every 7 days** (AltServer/SideStore does it in
+  one tap, or automatically when the PC and iPhone are on the same Wi-Fi).
+  Your files are kept when it refreshes.
+- Max 3 sideloaded apps at a time.
+- The app can't join Wi-Fi by itself, so the iPhone joins the other device's
+  offline Wi-Fi with the **Camera app** (scan the "iPhone Wi-Fi" code, tap
+  Join) or in Settings. Beam Share guides you and continues on its own.
+
+### Step 1: Put the project on GitHub (free)
+
+Create a free account at github.com, make a new **private** repository
+`beam_share` (empty, no README), then:
+
+```bash
+cd "E:\CLAUDE AI\beam_share"
+```
 
 ```bash
 git remote add origin https://github.com/YOUR-NAME/beam_share.git
@@ -143,94 +159,109 @@ git remote add origin https://github.com/YOUR-NAME/beam_share.git
 git push -u origin main
 ```
 
-2. **Create the App ID** at developer.apple.com › Certificates, IDs &
-   Profiles › Identifiers › `+` › App IDs › App:
-   - Bundle ID (explicit): `com.beamshare.beamShare` (or your own, then also
-     change it in `codemagic.yaml` and `ios/Runner.xcodeproj/project.pbxproj`)
-   - Capabilities: tick **Hotspot** (needed to join a phone's hotspot from
-     the QR code). Save.
-3. **Create the app in App Store Connect** (appstoreconnect.apple.com ›
-   Apps › `+` › New App): platform iOS, the same bundle ID, any SKU.
-   Open *App Information* and copy the numeric **Apple ID**; put it into
-   `codemagic.yaml` as `APP_STORE_APPLE_ID`.
-4. **Create an App Store Connect API key**: App Store Connect › Users and
-   Access › Integrations › App Store Connect API › `+`, role *App Manager*.
-   Download the `.p8` file (only possible once) and note the Issuer ID and
-   Key ID.
-5. **In Codemagic**: sign in with GitHub › Add application › pick the repo ›
-   *codemagic.yaml* workflow. Then Teams › your team › Integrations ›
-   **App Store Connect** › Connect: upload the `.p8`, Issuer ID, Key ID and
-   name it **`BeamShareASC`** (must match `codemagic.yaml`).
-6. **Code signing**: in the app's settings › Code signing identities ›
-   iOS certificates › *Generate certificate* (Apple Distribution), and in
-   iOS provisioning profiles › *Fetch profiles* (Codemagic creates an App
-   Store profile for the bundle ID). The `ios_signing` section of
-   `codemagic.yaml` then signs automatically.
-7. **Start a build**: Start new build › workflow **iOS -> TestFlight**.
-   It runs the engine tests, builds the IPA on an M2 Mac and uploads it to
-   TestFlight (~20–30 min). If Swift fails to compile, the log shows the line;
-   the iOS code was written without a Mac (see KNOWN_LIMITATIONS.md).
-8. **Export compliance**: the first upload asks about encryption in App Store
-   Connect › TestFlight. Beam Share uses standard TLS only for protecting
-   the user's own data. Answer the questionnaire (usually "exempt").
-9. **Install on your iPhone 17 Pro**: App Store Connect › TestFlight ›
-   Internal Testing › add yourself as a tester. Install the **TestFlight**
-   app on the iPhone, accept the invite, tap *Install*.
-   First launch: allow **Local Network**, **Camera** and **Photos** when
-   asked; they are all needed.
+### Step 2: Build the iPhone app in the cloud (pick ONE, both free)
+
+**Option A: Codemagic** (500 free Mac minutes/month, no credit card):
+1. codemagic.io › *Sign up with GitHub* › choose the free personal plan.
+2. *Add application* › GitHub › pick `beam_share` › project type
+   *Flutter App (via codemagic.yaml)*.
+3. *Start new build* › workflow **iOS (free, unsigned IPA)** › Start.
+4. After ~10–15 minutes open the build › *Artifacts* › download
+   **BeamShare-unsigned.ipa** to your PC.
+
+**Option B: GitHub Actions** (already in the repo):
+1. GitHub › your repo › *Actions* tab › enable workflows if asked.
+2. **iOS unsigned IPA** › *Run workflow*.
+3. When it's green, open the run › *Artifacts* › download
+   `BeamShare-unsigned-ipa` (a .zip containing the .ipa; unzip it).
+
+If the build fails, copy the red error lines from the log and send them to
+Claude: the Swift code was written without a Mac, so a small fix may be
+needed on the first build.
+
+### Step 3: Install on the iPhone with AltStore (free)
+
+AltStore is a well-known free, open-source sideloading tool (altstore.io).
+It signs the app with *your* Apple ID through Apple's own free developer
+service. Use an Apple ID you're comfortable with; some people make a
+separate free Apple ID just for this.
+
+1. On the PC install, **from Apple's website (not the Microsoft Store)**:
+   iTunes and iCloud for Windows. AltServer needs them.
+2. Download **AltServer for Windows** from altstore.io and install it.
+   It appears as a diamond icon in the system tray (bottom right).
+3. Plug the iPhone in with a cable, unlock it, tap **Trust This Computer**.
+4. Tray icon › *Install AltStore* › choose your iPhone › enter your Apple ID.
+5. On the iPhone: Settings › General › VPN & Device Management › your Apple
+   ID › **Trust**. On iOS 16 or newer also: Settings › Privacy & Security ›
+   **Developer Mode** › On (the iPhone restarts).
+6. Copy `BeamShare-unsigned.ipa` to the iPhone (iCloud Drive, or the Files
+   app via cable) › open **AltStore** › *My Apps* › `+` › pick the .ipa.
+   AltStore signs and installs Beam Share.
+7. Open Beam Share and allow **Local Network**, **Camera** and **Photos**.
+8. **Every few days**: open AltStore › *My Apps* › *Refresh All* while the PC
+   (with AltServer running) is on the same Wi-Fi. If you forget for 7 days,
+   the app just won't open until you refresh; nothing is lost.
+
+(*SideStore*, sidestore.io, is a free alternative that refreshes from the
+iPhone itself without the PC after the first setup.)
+
+### Optional: paid route later
+
+If you ever buy the Apple Developer Program, the `ios-testflight-paid`
+workflow in `codemagic.yaml` builds for TestFlight (no 7-day refresh) and
+enables joining Wi-Fi automatically. The comments in that file list the
+steps. You never need it for the app to work.
 
 ---
 
-## 4. Test an offline transfer between two phones (step by step)
+## 4. Test offline transfers step by step
 
-Do this in a place with **no Wi-Fi router involved**, ideally with mobile
-data switched off, to prove it's really offline.
+Mobile data **off**, Wi-Fi **on** on every device (it doesn't need to be
+connected to anything). Write down phone models, MB/s and any error.
 
-### A. Android → Android (or Android → iPhone / PC)
+### A. Android → Android
+1. Phone A: **Send** › *Photos & videos* › pick ~20 photos + 1 big video ›
+   **Next**. Allow "Nearby devices"/"Location". It should say
+   `Offline Wi-Fi "DIRECT-bs-…" is on`.
+2. Phone B: **Receive** › **Scan QR code** › tap **Connect** in the popup.
+3. Halfway: turn Phone B's Wi-Fi off for 5 s and on again → "Reconnecting…",
+   then it continues.
+4. End: "✅ N files verified, 0 errors" › **Open folder**. Compare a photo's
+   size/date/location with the original.
 
-1. Install the APK on both phones. Turn on **Wi-Fi** on both (no need to be
-   connected to anything). Turn **mobile data off**.
-2. **Phone A (sender):** open Beam Share › **Send** › *Photos & videos* ›
-   pick a few photos and one big video › **Next**. Allow "Nearby devices"
-   (Android 13+) or "Location" (Android 12 and older).
-3. Phone A shows a QR code and the line `Offline Wi-Fi "DIRECT-bs-..." is on`.
-4. **Phone B (receiver):** open Beam Share › **Receive** › **Scan QR code** ›
-   point at Phone A. Android shows "Connect to DIRECT-bs-...?" › **Connect**.
-   (iPhone: "Join Wi-Fi network?" › Join. PC: use *Paste code* with the code
-   copied from the sender, or connect both to the same Wi-Fi.)
-5. The transfer starts by itself: watch MB/s, time left, files verified.
-6. **Test resume:** halfway through, walk away until the speed drops to 0, or
-   switch Phone B's Wi-Fi off for 5 seconds and on again. The screen says
-   "Reconnecting..." and then continues (within 2 minutes).
-7. **Test pause:** tap Pause, wait, tap Resume.
-8. At the end: "✅ N files verified, 0 errors". Tap **Open folder**:
-   files are in `Download/BeamShare`, photos also appear in the gallery.
-9. **Check quality:** compare a photo's details on both phones (size in
-   bytes, date, location). They must be identical.
+### B. iPhone → iPhone (no Wi-Fi network at all)
+1. Both iPhones: Wi-Fi and Bluetooth **on** in Control Center (they power
+   Apple's peer-to-peer Wi-Fi). Keep both unlocked and close.
+2. iPhone B: **Receive**.
+3. iPhone A: **Send** › pick › **Next** › tap iPhone B under *Nearby devices*.
+4. iPhone B: **Accept**.
 
-### B. Same Wi-Fi, no QR (nearby devices)
+### C. Android or Windows → iPhone
+1. Android/PC: **Send** › pick › **Next**. Wait for `Offline Wi-Fi … is on`.
+2. Tap **iPhone Wi-Fi** above the QR code.
+3. iPhone: open the **Camera app** (not Beam Share), point at the code, tap
+   the *Join "DIRECT-bs-…"* banner.
+4. On the Android/PC tap **Beam Share code**.
+5. iPhone: Beam Share › **Receive** › **Scan QR code** › scan it. The
+   transfer starts.
+   (If you scan the Beam Share code first, the app shows the Wi-Fi name, copies
+   the password, and offers **Open Wi-Fi settings**; join there, come back,
+   and it continues by itself.)
 
-1. Both devices on the same Wi-Fi (or one joined to the other's hotspot).
-2. Receiver: **Receive** (it is now "visible").
-3. Sender: **Send** › pick files › **Next**: the receiver appears under
-   *Nearby devices* › tap it. The receiver taps **Accept**.
+### D. iPhone → Android or Windows
+The iPhone can't create a Wi-Fi network, so the receiver makes it:
+1. Android/PC: **Receive** › **Show my code**. Wait for `Offline Wi-Fi … is on`.
+2. Tap **iPhone Wi-Fi** › iPhone Camera app › scan › *Join*.
+3. Android/PC: tap **Beam Share code**.
+4. iPhone: Beam Share › **Send** › pick › **Next** › **Scan receiver's code** ›
+   scan. (Or, now that both are on the same network, the receiver appears
+   under *Nearby devices*: tap it and accept on the receiver.)
 
-### C. iPhone → iPhone (no network at all)
-
-1. Both iPhones: Wi-Fi and Bluetooth **on** (they power Apple's
-   peer-to-peer Wi-Fi), no need to join a network.
-2. iPhone B: **Receive**. iPhone A: **Send** › pick › **Next** › tap iPhone B
-   under *Nearby devices* › iPhone B taps **Accept**.
-
-### D. iPhone → Windows/Android
-
-iPhones cannot create hotspots, so the **receiver** makes the network:
-on the receiving Android/PC choose **Receive** › **Show my code**, then on
-the iPhone **Send** › pick › **Next** › **Scan receiver's code**.
-
-### What to write down while testing
-
-- Phone models and Android/iOS versions.
-- MB/s at 1 m distance and at 5 m.
-- Did the hotspot start? (`Offline Wi-Fi ... is on` vs `Using the current Wi-Fi network`)
-- Any file with a different size/date on the receiver (there should be none).
+### E. Android ↔ Windows, and same-Wi-Fi without QR
+- **Offline:** like A. A PC can't scan with a camera, so on the phone tap
+  **Copy code**, send it to the PC (e.g. a USB cable or a note), and use
+  **Receive › Paste code** on the PC.
+- **Easier:** put both on the same home Wi-Fi. Receiver: **Receive**. Sender:
+  **Send** › pick › **Next** › tap the receiver under *Nearby devices* ›
+  **Accept**.

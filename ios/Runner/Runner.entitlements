@@ -2,8 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Join the other device's hotspot from the QR code (NEHotspotConfiguration).
-	     Enable "Hotspot" for this App ID in the Apple Developer portal. -->
+	<!-- NOT USED by default (free build). Only for a PAID Apple Developer account:
+	     lets the app join the other device's hotspot by itself.
+	     To use it: enable "Hotspot" for the App ID, add
+	     CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements to the Runner target,
+	     and build with: flutter build ipa --dart-define=IOS_HOTSPOT=true -->
 	<key>com.apple.developer.networking.HotspotConfiguration</key>
 	<true/>
 </dict>

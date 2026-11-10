@@ -70,6 +70,15 @@ class _ShareScreenState extends State<ShareScreen> with StageNavigation {
                       InfoBanner(text: t.error!, error: true, onClose: t.clearError),
                       const SizedBox(height: 12),
                     ],
+                    if (t.manualJoin != null) ...[
+                      ManualJoinCard(
+                        ssid: t.manualJoin!.ssid,
+                        passphrase: t.manualJoin!.passphrase,
+                        onOpenSettings: PlatformBridge.openWifiSettings,
+                        onCancel: t.cancelManualJoin,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Center(
                       child: code == null || t.stage == Stage.connecting
                           ? SizedBox(
@@ -83,11 +92,19 @@ class _ShareScreenState extends State<ShareScreen> with StageNavigation {
                                 ],
                               ),
                             )
-                          : QrCard(data: code.encode(), size: 240),
+                          : CodeSwitcher(
+                              beamCode: code.encode(),
+                              wifiCode: t.hotspot == null
+                                  ? null
+                                  : PlatformBridge.wifiQrData(t.hotspot!.ssid, t.hotspot!.passphrase),
+                            ),
                     ),
-                    const SizedBox(height: 14),
-                    Text('On the other device: open Beam Share › Receive › Scan',
-                        textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant)),
+                    if (PlatformBridge.isIOS && t.stage == Stage.waiting) ...[
+                      const SizedBox(height: 10),
+                      const InfoBanner(
+                          text: 'Sending to another iPhone? Open Receive on it: it shows up under '
+                              'Nearby devices, even with no Wi-Fi network.'),
+                    ],
                     if (code != null && t.stage == Stage.waiting) ...[
                       const SizedBox(height: 10),
                       _NetworkLine(text: t.status ?? '', offline: t.hotspot != null),

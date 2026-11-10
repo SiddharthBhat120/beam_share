@@ -103,6 +103,15 @@ class _ReceiveScreenState extends State<ReceiveScreen> with StageNavigation {
                       InfoBanner(text: t.error!, error: true, onClose: t.clearError),
                       const SizedBox(height: 12),
                     ],
+                    if (t.manualJoin != null) ...[
+                      ManualJoinCard(
+                        ssid: t.manualJoin!.ssid,
+                        passphrase: t.manualJoin!.passphrase,
+                        onOpenSettings: PlatformBridge.openWifiSettings,
+                        onCancel: t.cancelManualJoin,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     if (PlatformBridge.isMobile) ...[
                       FilledButton.icon(
                         onPressed: busy ? null : _scan,
@@ -115,7 +124,13 @@ class _ReceiveScreenState extends State<ReceiveScreen> with StageNavigation {
                     ],
                     Center(
                       child: _showMyCode && t.myCode != null
-                          ? QrCard(data: t.myCode!.encode(), size: 220)
+                          ? CodeSwitcher(
+                              beamCode: t.myCode!.encode(),
+                              size: 220,
+                              wifiCode: t.hotspot == null
+                                  ? null
+                                  : PlatformBridge.wifiQrData(t.hotspot!.ssid, t.hotspot!.passphrase),
+                            )
                           : RadarPulse(
                               child: busy
                                   ? const CircularProgressIndicator()

@@ -25,7 +25,8 @@ import UIKit
 // MARK: - Beam Share native iOS code ("beam/platform" channel)
 //
 //  * joinWifi: joins the other device's hotspot from the QR code
-//    (NEHotspotConfiguration; needs the Hotspot Configuration entitlement).
+//    (NEHotspotConfiguration). Needs the paid-only Hotspot entitlement, so the
+//    free build doesn't call it; it uses openWifiSettings + manual join.
 //  * pickMedia: PHPicker + PHAssetResourceManager. Exports the ORIGINAL
 //    resources (HEIC, ProRAW/DNG, MOV, Live Photo video) byte for byte.
 //    Never goes through UIImage, so nothing is re-encoded or compressed.
@@ -60,6 +61,10 @@ final class BeamPlatform: NSObject, FlutterPlugin, PHPickerViewControllerDelegat
       result(nil)
     case "joinWifi":
       joinWifi(ssid: args["ssid"] as? String ?? "", passphrase: args["passphrase"] as? String ?? "", result: result)
+    case "openWifiSettings":
+      // Free builds can't join Wi-Fi by themselves: send the user to Settings.
+      openFirst(["App-Prefs:root=WIFI", "App-prefs:WIFI", UIApplication.openSettingsURLString])
+      result(nil)
     case "leaveWifi":
       if let s = joinedSsid { NEHotspotConfigurationManager.shared.removeConfiguration(forSSID: s) }
       joinedSsid = nil
@@ -96,6 +101,16 @@ final class BeamPlatform: NSObject, FlutterPlugin, PHPickerViewControllerDelegat
   }
 
   // MARK: Wi-Fi
+
+  /// Tries each URL in turn until one opens (the Wi-Fi page URL is not
+  /// guaranteed on every iOS version; the last one opens this app's settings).
+  private func openFirst(_ urls: [String]) {
+    guard let first = urls.first else { return }
+    guard let url = URL(string: first) else { openFirst(Array(urls.dropFirst())); return }
+    UIApplication.shared.open(url, options: [:]) { ok in
+      if !ok { self.openFirst(Array(urls.dropFirst())) }
+    }
+  }
 
   private func joinWifi(ssid: String, passphrase: String, result: @escaping FlutterResult) {
     let config = passphrase.isEmpty

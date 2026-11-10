@@ -1,4 +1,5 @@
 import 'package:beam_share/app/theme.dart';
+import 'package:beam_share/services/platform_bridge.dart';
 import 'package:beam_share/util/format.dart';
 import 'package:beam_share/widgets/common.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +21,11 @@ void main() {
       expect(plural(1, 'file'), '1 file');
       expect(plural(1003, 'file'), '1,003 files');
     });
+  });
+
+  test('Wi-Fi QR for the iPhone camera escapes special characters', () {
+    expect(PlatformBridge.wifiQrData('DIRECT-bs-PC', 'abc123'), 'WIFI:T:WPA;S:DIRECT-bs-PC;P:abc123;;');
+    expect(PlatformBridge.wifiQrData('My;Net', r'p:a\ss'), r'WIFI:T:WPA;S:My\;Net;P:p\:a\\ss;;');
   });
 
   testWidgets('action card and progress ring render in dark mode', (tester) async {

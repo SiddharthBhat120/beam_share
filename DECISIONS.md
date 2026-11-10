@@ -129,6 +129,17 @@ LocalOnlyHotspot works on more devices but often drops the normal Wi-Fi.
 "Connect" dialog, then `bindProcessToNetwork` routes the app's sockets over
 the offline network (Android otherwise avoids networks without internet).
 
+**iOS, zero cost (default).** No paid Apple account is used. Cloud Macs
+(Codemagic free tier or GitHub Actions) build an *unsigned* IPA and
+SideStore/AltStore sign it with a free Apple ID (7-day refresh). A free
+account can't have the Hotspot Configuration entitlement, so the iPhone
+joins the other device's Wi-Fi by itself: the host shows a second, standard
+`WIFI:T:WPA;S:...;P:...;;` QR code that the iPhone **Camera app** joins in
+one tap, or Beam Share copies the password and opens Settings, then polls
+for up to 3 minutes and continues automatically. The automatic
+`NEHotspotConfiguration` join is still in the code and is switched on with
+`--dart-define=IOS_HOTSPOT=true` for a paid build.
+
 **iOS:** apps cannot create hotspots. iOS joins hotspots via
 `NEHotspotConfiguration`; iPhone-to-iPhone uses Apple's peer-to-peer Wi-Fi
 (AWDL) through `NWListener/NWBrowser` with `includePeerToPeer = true`. Dart

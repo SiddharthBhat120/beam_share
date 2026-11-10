@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:transfer_core/transfer_core.dart';
 
 import '../models/picked_item.dart';
@@ -24,6 +25,13 @@ class PendingRequest {
   final DeviceInfo device;
   final int? files;
   final int? bytes;
+}
+
+/// Wi-Fi the user has to join by hand (free iOS builds).
+class ManualJoin {
+  ManualJoin(this.ssid, this.passphrase);
+  final String ssid;
+  final String passphrase;
 }
 
 class TransferController extends ChangeNotifier {
@@ -48,6 +56,9 @@ class TransferController extends ChangeNotifier {
   TransferProgress? progress;
   TransferSummary? summary;
   PendingRequest? request;
+
+  /// Set while we wait for the user to join a Wi-Fi in iOS Settings.
+  ManualJoin? manualJoin;
   List<NearbyDevice> nearby = const [];
   bool _joinedWifi = false;
   Completer<int>? _listening;
@@ -177,6 +188,32 @@ class TransferController extends ChangeNotifier {
       status = 'Connecting to ${code.deviceName}...';
     });
     var reachable = await _anyReachable(code.hosts, code.port, const Duration(milliseconds: 1500));
+    if (!reachable && code.ssid != null && !PlatformBridge.canJoinWifi) {
+      // Free iOS build: Apple only lets paid apps join Wi-Fi by themselves.
+      // The user joins in Settings (password is on the clipboard) and we
+      // continue automatically as soon as the other device is reachable.
+      await Clipboard.setData(ClipboardData(text: code.passphrase ?? ''));
+      _set(() {
+        manualJoin = ManualJoin(code.ssid!, code.passphrase ?? '');
+        status = 'Join "${code.ssid}" in Settings > Wi-Fi';
+      });
+      final deadline = DateTime.now().add(const Duration(minutes: 3));
+      while (!reachable && manualJoin != null && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        reachable = await _anyReachable(code.hosts, code.port, const Duration(milliseconds: 800));
+      }
+      final cancelledByUser = manualJoin == null;
+      _set(() => manualJoin = null);
+      if (cancelledByUser) return;
+      if (!reachable) {
+        _set(() {
+          stage = Stage.idle;
+          error = 'Still not connected to "${code.ssid}". Join it in Settings > Wi-Fi, then scan again.';
+        });
+        return;
+      }
+      _set(() => status = 'Connected, opening a secure link...');
+    }
     if (!reachable && code.ssid != null) {
       _set(() => status = 'Joining "${code.ssid}"...');
       final joined = await PlatformBridge.joinWifi(code.ssid!, code.passphrase ?? '');
@@ -390,12 +427,20 @@ class TransferController extends ChangeNotifier {
       peer = null;
       progress = null;
       request = null;
+      manualJoin = null;
       nearby = const [];
       if (!keepItems) items = [];
     });
   }
 
   void clearError() => _set(() => error = null);
+
+  /// User gave up on joining the Wi-Fi by hand.
+  void cancelManualJoin() => _set(() {
+        manualJoin = null;
+        stage = Stage.idle;
+        status = null;
+      });
 
   void setItems(List<PickedItem> list) => _set(() => items = list);
 

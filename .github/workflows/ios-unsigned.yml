@@ -1,0 +1,48 @@
+# Free alternative to Codemagic: builds BeamShare-unsigned.ipa on GitHub's
+# macOS machines. Free for public repositories; private repositories get a
+# monthly free allowance (macOS minutes count 10x, so ~20 builds/month).
+#
+# Run it: GitHub > your repo > Actions > "iOS unsigned IPA" > Run workflow.
+# Download: open the finished run > Artifacts > BeamShare-unsigned-ipa.
+# Install it with SideStore/AltStore (see README.md, "iPhone for free").
+
+name: iOS unsigned IPA
+
+on:
+  workflow_dispatch: # manual only, so no free minutes are wasted
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Engine unit tests
+        working-directory: packages/transfer_core
+        run: |
+          dart pub get
+          dart test test/blake3_test.dart test/unit_test.dart
+
+      - name: Build unsigned app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package as IPA
+        run: |
+          mkdir Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry BeamShare-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BeamShare-unsigned-ipa
+          path: BeamShare-unsigned.ipa
+          retention-days: 30

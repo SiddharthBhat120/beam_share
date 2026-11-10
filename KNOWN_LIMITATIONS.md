@@ -26,9 +26,11 @@ no second Wi-Fi adapter) and what is not built yet.
 3. **iOS code has never been compiled** (no Mac). It is written against
    current Swift/Flutter APIs and will be compiled by Codemagic; expect to
    fix small compile errors on the first cloud build. Specifically untested:
-   - `NEHotspotConfiguration` join (needs the *Hotspot* capability on your
-     App ID; iOS sometimes reports success even if joining failed — the app
-     then retries the connection for 25 s and shows an error).
+   - The free-build Wi-Fi flow: Camera-app Wi-Fi QR join, the
+     "Open Wi-Fi settings" shortcut (it uses an `App-Prefs:` link that some
+     iOS versions ignore; then it opens Beam Share's own settings page, and
+     you tap back to Settings › Wi-Fi), and auto-continue after joining.
+   - Sideloading the unsigned IPA with AltStore/SideStore.
    - iPhone-to-iPhone over AWDL (`includePeerToPeer`) and the loopback relay.
    - `PHAssetResourceManager` export of ProRAW / Live Photos / iCloud items.
 4. **Windows Wi-Fi Direct soft-AP** (`WiFiDirectAdvertisementPublisher`
@@ -48,6 +50,14 @@ no second Wi-Fi adapter) and what is not built yet.
    slower for resends. Not seen in practice yet.
 8. **Unicode/odd file names on FAT32/exFAT SD cards** (e.g. characters that
    SD cards reject) were not tested.
+
+## Free iPhone build limits (Apple's rules)
+
+- A free Apple ID signature lasts **7 days**: refresh in AltStore/SideStore.
+- Max 3 sideloaded apps per free Apple ID.
+- No automatic Wi-Fi joining (paid-only entitlement): one extra tap with
+  the Camera app, or joining in Settings.
+- The paid TestFlight route is kept in `codemagic.yaml` but is optional.
 
 ## Not implemented yet (roadmap)
 
