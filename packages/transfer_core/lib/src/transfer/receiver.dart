@@ -87,6 +87,12 @@ class TransferReceiver {
   /// Manifest once it arrived (null before the first round).
   Manifest? get manifest => _manifest;
 
+  /// Final paths of all files saved and verified so far.
+  List<String> get savedFiles => [
+        for (final f in _files ?? <_RxFile>[])
+          if (f.done && !f.entry.isDirectory) f.target,
+      ];
+
   void pause() {
     _localPaused = true;
     _applyPause();

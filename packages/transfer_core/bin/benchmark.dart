@@ -6,10 +6,11 @@
 //   build/benchmark.exe 4096       (4 GB big file)
 //
 // Prints BLAKE3 speed and transfer MB/s for different stream counts, with
-// and without TLS. Note: on localhost both sides share one CPU, so a real
-// Wi-Fi transfer is limited by the radio, not by these numbers.
+// and without TLS. Sender and receiver run in separate isolates (threads).
+// A real Wi-Fi transfer is limited by the radio, not by these numbers.
 
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:transfer_core/transfer_core.dart';
@@ -59,22 +60,22 @@ Future<void> main(List<String> args) async {
             me: me, myRole: 'sender', identity: identity, token: token, options: opts);
         final sw = Stopwatch()..start();
         final sendF = server.sessions.first.then((l) => TransferSender(link: l, sources: sources).run());
-        final link = await DialerLink.connect(
-            hosts: ['127.0.0.1'],
-            port: server.port,
-            fingerprint: identity.fingerprint,
-            me: peer,
-            role: 'receiver',
-            token: token,
-            options: opts);
-        final r = await TransferReceiver(link: link, destination: dst.path).run();
+        // The receiver runs in its own isolate (own CPU thread), like a real
+        // second device would.
+        final port = server.port, fp = identity.fingerprint, dstPath = dst.path;
+        final r = await Isolate.run(() async {
+          final link = await DialerLink.connect(
+              hosts: ['127.0.0.1'], port: port, fingerprint: fp, me: peer, role: 'receiver', token: token, options: opts);
+          final s = await TransferReceiver(link: link, destination: dstPath).run();
+          return (s.filesVerified, s.filesFailed);
+        });
         await sendF;
         sw.stop();
         await server.close();
         final speed = total / mb / (sw.elapsedMicroseconds / 1e6);
         print('${secure ? 'TLS  ' : 'plain'}  streams=$streams  '
             '${(total / mb).toStringAsFixed(0)} MB in ${(sw.elapsedMilliseconds / 1000).toStringAsFixed(1)}s  '
-            '=> ${speed.toStringAsFixed(1)} MB/s  verified=${r.filesVerified} errors=${r.filesFailed}');
+            '=> ${speed.toStringAsFixed(1)} MB/s  verified=${r.$1} errors=${r.$2}');
         await dst.delete(recursive: true);
       }
     }
