@@ -1,0 +1,25 @@
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Transfer engine (pure Dart) - unit tests
+        working-directory: packages/transfer_core
+        run: |
+          dart pub get
+          dart analyze
+          dart test --exclude-tags integration
+      - name: App - analyze and widget tests
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test

@@ -1,5 +1,7 @@
 # Beam Share
 
+[![tests](https://github.com/sidxcodes/beam_share/actions/workflows/ci.yml/badge.svg)](https://github.com/sidxcodes/beam_share/actions/workflows/ci.yml)
+
 Send files and folders between **Android, iPhone and Windows**, in any
 direction, **without internet and without a router**. Original quality (no
 compression, dates kept), every byte checked with BLAKE3, encrypted, and it
